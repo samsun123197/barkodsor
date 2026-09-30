@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Golf Barkod Portalı</title>
+    
+    <!-- PWA ve Mobil Meta Etiketleri -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Golf Barkod">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <!-- Tailwind CSS & Lucide Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- HTML5-QRCode Kamera Kütüphanesi -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <style>
+        #tableContainer {
+            max-height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #tableContainer table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.875rem;
+        }
+
+        #tableContainer th {
+            background-color: #334155 !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 2px solid #0f172a;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #tableContainer td {
+            padding: 0.625rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            color: #475569;
+            white-space: nowrap;
+        }
+
+        #tableContainer tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .highlight-row {
+            background-color: #fef08a !important;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex flex-col font-sans select-none">
+
+    <!-- Header Bar -->
+    <header class="bg-slate-900 text-white px-4 py-3 shadow-md flex justify-between items-center sticky top-0 z-30">
+        <div class="flex items-center space-x-3">
+            <i data-lucide="scan-barcode" class="w-7 h-7 text-blue-400"></i>
+            <div>
+                <h1 class="text-base font-bold leading-tight">Barkod Sorgulama</h1>
+                <p class="text-[10px] text-slate-400">Golf Dondurma PWA Portal</p>
+            </div>
+        </div>
+        <div id="statsBadge" class="hidden bg-blue-900/80 text-blue-200 border border-blue-700 px-2.5 py-1 rounded-lg text-xs font-semibold">
+            <!-- İstatistik -->
+        </div>
+    </header>
+
+    <!-- Ana İçerik -->
+    <main class="flex-1 p-3 md:p-6 flex flex-col space-y-4 max-w-[1920px] w-full mx-auto">
+
+        <!-- Arama Paneli -->
+        <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <input type="hidden" id="bayiId" value="134010607746">
+            <input type="hidden" id="token" value="7760710e-f17f-4b02-99d0-b4bda73b1ea4">
+
+            <div class="w-full">
+                <label class="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">
+                    <i data-lucide="search" class="w-3.5 h-3.5 inline mr-1"></i>Barkod Okutun veya Yazın
+                </label>
+                <div class="flex flex-wrap md:flex-nowrap gap-2">
+                    <div class="relative flex-1 min-w-[200px]">
+                        <input type="text" id="barcodeSearch" placeholder="Barkod veya ürün ara..." autofocus
+                               class="w-full pl-10 pr-10 py-3 bg-blue-50/70 border-2 border-blue-400 rounded-xl text-base font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition shadow-inner">
+                        <i data-lucide="barcode" class="w-6 h-6 text-blue-600 absolute left-3 top-3"></i>
+                        <button onclick="temizleArama()" title="Aramayı Temizle" class="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 transition">
+                            <i data-lucide="x-circle" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <!-- Kamera İle Oku Butonu -->
+                    <button onclick="kameraTaraAc()" class="bg-emerald-600 active:bg-emerald-700 hover:bg-emerald-700 text-white font-bold px-4 py-3 rounded-xl text-sm flex items-center justify-center space-x-1.5 transition shadow-sm">
+                        <i data-lucide="camera" class="w-5 h-5"></i>
+                        <span class="hidden sm:inline">Kamera</span>
+                    </button>
+
+                    <!-- Ara Butonu -->
+                    <button onclick="barkodAra()" class="bg-blue-600 active:bg-blue-700 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl text-sm flex items-center justify-center space-x-1.5 transition shadow-sm">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        <span>Ara</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Kamera Alanı Modalı -->
+        <section id="cameraModal" class="hidden bg-slate-900 text-white p-4 rounded-xl shadow-lg border border-slate-700 flex flex-col items-center">
+            <div class="w-full flex justify-between items-center mb-3 max-w-md">
+                <span class="text-xs font-semibold text-emerald-400 flex items-center">
+                    <i data-lucide="scan" class="w-4 h-4 mr-1 animate-pulse"></i> Barkodu Kameraya Yaklaştırın
+                </span>
+                <button onclick="kameraKapat()" class="text-slate-300 hover:text-white text-xs bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                    Kapat
+                </button>
+            </div>
+            <div id="reader" class="w-full max-w-md bg-black rounded-lg overflow-hidden border border-slate-700"></div>
+        </section>
+
+        <!-- Tablo Alanı -->
+        <section class="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden min-h-[500px] relative">
+            <div id="loadingState" class="hidden flex-1 flex flex-col items-center justify-center p-8 space-y-3">
+                <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-sm text-slate-600 font-medium">Veriler yükleniyor...</p>
+            </div>
+
+            <div id="tableContainer" class="flex-1 overflow-auto p-2 sm:p-4">
+                <!-- Dönen HTML Tablosu -->
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        let cachedRows = [];
+        let html5QrcodeScanner = null;
+
+        // BİP SESİ MOTORU (Web Audio API - Harici ses dosyası gerektirmez)
+        function bipSesiCal() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                oscillator.type = 'sine'; // Net barkod okuyucu tonu
+                oscillator.frequency.setValueAtTime(1800, audioCtx.currentTime); // 1800 Hz Frekans
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.12); // 120ms bip süresi
+            } catch (e) {
+                console.log("Ses çalınamadı:", e);
+            }
+        }
+
+        async function raporuYukle() {
+            const bayiId = document.getElementById('bayiId').value.trim();
+            const token = document.getElementById('token').value.trim();
+            
+            const values = `2;(-1,${bayiId})|6;|7;|10;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;|;`;
+            const rw = "350012450,350012451,350012446,350012452,350012454,350012456,350012457,350012444";
+            const dt = "350012448";
+
+            const targetUrl = `https://vp.golfdondurma.com.tr/SAASReport/ReportView.aspx?CubeReportId=350012443&Values=${encodeURIComponent(values)}&RoleId=134053451661&LanguageId=1&UserId=134053530632&ReportTypeId=1&RW=${rw}&CL=&DT=${dt}&Mode=ExportToHtml&Token=${token}`;
+
+            const container = document.getElementById('tableContainer');
+            const loading = document.getElementById('loadingState');
+
+            container.innerHTML = '';
+            loading.classList.remove('hidden');
+            cachedRows = [];
+
+            try {
+                const response = await fetch(targetUrl);
+                if (!response.ok) throw new Error("HTTP Hatası: " + response.status);
+                
+                const htmlText = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
+                const table = doc.querySelector('table');
+
+                loading.classList.add('hidden');
+
+                if (table) {
+                    table.removeAttribute('style');
+                    table.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+
+                    container.appendChild(table);
+
+                    const rows = table.querySelectorAll('tr');
+                    rows.forEach((row) => {
+                        if (row.querySelector('th')) {
+                            row.style.display = '';
+                            return;
+                        }
+                        
+                        cachedRows.push({
+                            element: row,
+                            text: row.innerText.toLowerCase()
+                        });
+                    });
+
+                    barkodAra(false); // İlk açılışta ses çıkarma
+                } else {
+                    container.innerHTML = `<div class="p-4 text-amber-700 bg-amber-50 rounded-lg border border-amber-200">Rapor verisi alınamadı. Token kontrol edin.</div>`;
+                }
+            } catch (err) {
+                loading.classList.add('hidden');
+                container.innerHTML = `<div class="p-4 text-red-600 bg-red-50 rounded-lg border border-red-200"><h3 class="font-bold">Erişim Hatası!</h3><p class="text-xs">${err.message}</p></div>`;
+            }
+        }
+
+        // BARKOD ARAMA VE BİP TETİKLEYİCİ
+        function barkodAra(sesCal = true) {
+            const query = document.getElementById('barcodeSearch').value.trim().toLowerCase();
+            const statsBadge = document.getElementById('statsBadge');
+
+            if (cachedRows.length === 0) return;
+
+            let visibleCount = 0;
+            let firstMatchedRow = null;
+
+            requestAnimationFrame(() => {
+                for (let i = 0; i < cachedRows.length; i++) {
+                    const item = cachedRows[i];
+
+                    if (query === '' || item.text.includes(query)) {
+                        item.element.style.display = '';
+                        visibleCount++;
+
+                        if (query !== '') {
+                            item.element.classList.add('highlight-row');
+                            if (!firstMatchedRow) firstMatchedRow = item.element;
+                        } else {
+                            item.element.classList.remove('highlight-row');
+                        }
+                    } else {
+                        item.element.style.display = 'none';
+                        item.element.classList.remove('highlight-row');
+                    }
+                }
+
+                statsBadge.classList.remove('hidden');
+                statsBadge.innerText = query ? `Sonuç: ${visibleCount}` : `Toplam: ${visibleCount}`;
+
+                // Sonuç bulunduysa ve arama yapıldıysa Bip sesi çal
+                if (query !== '' && visibleCount > 0 && sesCal) {
+                    bipSesiCal();
+                }
+
+                if (firstMatchedRow) {
+                    firstMatchedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }
+
+        // KAMERA TARA
+        function kameraTaraAc() {
+            const cameraModal = document.getElementById('cameraModal');
+            cameraModal.classList.remove('hidden');
+
+            if (!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5Qrcode("reader");
+            }
+
+            const config = { fps: 15, qrbox: { width: 260, height: 160 } };
+
+            html5QrcodeScanner.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText) => {
+                    document.getElementById('barcodeSearch').value = decodedText;
+                    kameraKapat();
+                    barkodAra(true);
+                },
+                () => {}
+            ).catch(err => {
+                alert("Kamera izni verilemedi: " + err);
+                kameraKapat();
+            });
+        }
+
+        function kameraKapat() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.stop().then(() => {
+                    document.getElementById('cameraModal').classList.add('hidden');
+                }).catch(() => {
+                    document.getElementById('cameraModal').classList.add('hidden');
+                });
+            } else {
+                document.getElementById('cameraModal').classList.add('hidden');
+            }
+        }
+
+        function temizleArama() {
+            const input = document.getElementById('barcodeSearch');
+            input.value = '';
+            input.focus();
+            barkodAra(false);
+        }
+
+        document.getElementById('barcodeSearch').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                barkodAra(true);
+            }
+        });
+
+        // PWA Service Worker Kaydı
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            raporuYukle();
+        });
+    </script>
+</body>
+</html>
